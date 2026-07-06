@@ -340,7 +340,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 <script>
 const $=id=>document.getElementById(id);
 const dataLayer=window.dataLayer=window.dataLayer||[];
-const state={domain:'',competitors:[],email:'',name:'',score:0,cited:0,variant:'default',result:null};
+const state={domain:'',competitors:[],email:'',name:'',score:0,cited:0,variant:'default',result:null,queriesTested:[]};
 
 /* ====================================================================
    API CONFIG — set base to your backend to go LIVE. Empty = mock/demo.
@@ -351,8 +351,7 @@ const state={domain:'',competitors:[],email:'',name:'',score:0,cited:0,variant:'
      GET  {base}/audit/{jobId} -> {status:'running',progress,queriesTested} | {status:'done',result:{...}} | {status:'error',message}
      POST {base}/lead          -> 200  (forwards lead to CRM/ESP)
    ==================================================================== */
-window.Y77_AUDIT_API = {base: 'https://grayn-aeo-production.up.railway.app/api/v1/public'};
-const API=Object.assign({base:'',pollIntervalMs:1500,timeoutMs:120000},(window.Y77_AUDIT_API||{}));
+const API=Object.assign({base:'https://grayn-aeo-production.up.railway.app/public',pollIntervalMs:1500,timeoutMs:120000},(window.Y77_AUDIT_API||{}));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 /* ---------- DYNAMIC HEADLINES (message match per ad group) ----------
@@ -401,8 +400,8 @@ const EDU=[
   {tag:'The upside',title:'Cited brands earn ~120% more clicks',body:'Being named inside an AI answer drives roughly 120% more clicks per impression. The citation is the new #1 ranking.'},
   {tag:'The risk',title:'AI answers cut #1 clicks by ~58%',body:'When an AI Overview appears, clicks to the top organic result drop ~58%. Ranking alone no longer protects your traffic.'}
 ];
-const QT=['best {c} for small business','top {c} companies 2026','is {b} worth it','{c} alternatives','who offers the best {c}','most trusted {c} providers','{c} for startups','affordable {c} services','{c} reviews','recommended {c} tools'];
-const ENG=['ChatGPT','Perplexity','Gemini','AI Overview'];
+const QT=['best alternatives to {b}','top competitors to {b}','is {b} worth it','{b} pricing and reviews','who offers better services than {b}','most trusted solutions like {b}','{b} for startups','{b} customer reviews','recommended tools similar to {b}','how does {b} compare'];
+const ENG=['ChatGPT','Perplexity','Gemini','Google AI', 'Claude', 'DeepSeek', 'Grok'];
 const SCAN_START=42;
 const ENGINE_TILES=[{n:'ChatGPT',at:50},{n:'Perplexity',at:57},{n:'Gemini',at:64},{n:'Google AI',at:72},{n:'Grok',at:80},{n:'Claude',at:90},{n:'DeepSeek',at:100}];
 const STAGES=[{l:'Researching your brand & site',at:12},{l:'Identifying your competitors',at:24},{l:'Mapping the topics buyers ask',at:36},{l:'Generating real buyer prompts',at:42},{l:'Scanning the AI platforms',at:92},{l:'Scoring visibility & citations',at:100}];
@@ -410,7 +409,7 @@ function buildStages(){$('stages2').innerHTML=STAGES.map((s,i)=>`<div class="st2
 function updateStages(c){let activeSet=false;STAGES.forEach((s,i)=>{const el=document.querySelector('.st2[data-i="'+i+'"]');if(!el)return;const prev=i===0?0:STAGES[i-1].at;if(c>=s.at){el.classList.remove('active');el.classList.add('done');}else if(c>=prev&&!activeSet){el.classList.add('active');activeSet=true;}});}
 function buildEngines(){$('engines').innerHTML=ENGINE_TILES.map((e,i)=>`<div class="eng-tile" data-i="${i}"><span class="eng-dot"></span><span class="eng-name">${e.n}</span><span class="eng-status" id="es${i}">queued</span></div>`).join('');}
 function updateEngines(c,h){ENGINE_TILES.forEach((e,i)=>{const tile=document.querySelector('.eng-tile[data-i="'+i+'"]');if(!tile)return;const st=$('es'+i);if(c>=e.at){if(!tile.classList.contains('done')){tile.classList.remove('active');tile.classList.add('done');st.textContent='cited '+(3+((h>>(i*3))%16))+'×';}}else{const prevAt=i===0?SCAN_START:ENGINE_TILES[i-1].at;if(c>=prevAt&&!tile.classList.contains('active')){tile.classList.add('active');st.textContent='pinging…';}}});}
-function pushQueryRow(c){const brand=state.domain.split('.')[0],cat='[your category]';const q=QT[(Math.max(0,c)/4|0)%QT.length].replace('{c}',cat).replace('{b}',brand);const eng=ENG[Math.abs(c)%ENG.length];const cited=Math.random()<0.22;const log=$('qlog');const row=document.createElement('div');row.className='qrow';row.innerHTML=`<span class="eng">${eng}</span><span class="q">“${q}”</span><span class="r ${cited?'yes':'no'}">${cited?'cited':'not cited'}</span>`;log.prepend(row);while(log.children.length>4)log.removeChild(log.lastChild);}
+function pushQueryRow(c){const brand=state.domain.split('.')[0];const qt=state.queriesTested&&state.queriesTested.length?state.queriesTested:QT;const qIdx=Math.floor(Math.abs(c))%qt.length;const q=qt[qIdx].replace(/\{b\}/g,brand);const engIdx=Math.floor(Math.abs(c*1.3))%ENG.length;const eng=ENG[engIdx];const cited=Math.random()<0.22;const log=$('qlog');const row=document.createElement('div');row.className='qrow';row.innerHTML=`<span class="eng">${eng}</span><span class="q">“${q}”</span><span class="r ${cited?'yes':'no'}">${cited?'cited':'not cited'}</span>`;log.prepend(row);while(log.children.length>4)log.removeChild(log.lastChild);}
 function setProgress(c,h){c=Math.max(0,Math.min(100,Math.round(c)));$('bar').style.width=c+'%';$('cCount').textContent=c;updateStages(c);updateEngines(c,h);}
 let auditEdu=null;
 function startEdu(){let e=0;renderEdu(0);auditEdu=setInterval(()=>{e=(e+1)%EDU.length;renderEdu(e);},2200);}
@@ -431,6 +430,7 @@ async function runAuditLive(){const h=hash(state.domain);const t0=Date.now();let
         await sleep(API.pollIntervalMs);
         const pr=await(await fetch(API.base+'/audit/'+encodeURIComponent(sj.jobId))).json();
         if(typeof pr.progress==='number')setProgress(pr.progress,h);
+        if(pr.queriesTested&&pr.queriesTested.length>0)state.queriesTested=pr.queriesTested;
         if(pr.status==='done'){result=pr.result;break;}
         if(pr.status==='error')throw new Error(pr.message||'audit error');
       }
@@ -444,7 +444,7 @@ function renderEdu(i){$('eduTag').innerHTML=EDU[i].tag;$('eduTitle').innerHTML=E
 
 /* STEP 4 */
 function openGate(){show('s4',2);}
-function submitGate(){const em=$('emailInput').value.trim();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){$('emailErr').style.display='block';return;}$('emailErr').style.display='none';state.email=em;state.name=$('nameInput').value.trim();const lead={email:em,name:state.name,domain:state.domain,competitors:state.competitors.slice(),variant:state.variant,score:state.result&&state.result.score};dataLayer.push({event:'lead_captured',audit_domain:state.domain,email:em,name:state.name,competitors:lead.competitors,lp_variant:state.variant});if(API.base){fetch(API.base+'/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(lead)}).catch(e=>console.warn('[Y77 lead] post failed',e));}renderResults();}
+function submitGate(){const em=$('emailInput').value.trim();const freeDomains=['gmail.com','yahoo.com','hotmail.com','outlook.com','aol.com','icloud.com'];const dom=em.split('@')[1]?.toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)||freeDomains.includes(dom)){$('emailErr').style.display='block';return;}$('emailErr').style.display='none';state.email=em;state.name=$('nameInput').value.trim();const lead={email:em,name:state.name,domain:state.domain,competitors:state.competitors.slice(),variant:state.variant,score:state.result&&state.result.score};dataLayer.push({event:'lead_captured',audit_domain:state.domain,email:em,name:state.name,competitors:lead.competitors,lp_variant:state.variant});if(API.base){fetch(API.base+'/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(lead)}).catch(e=>console.warn('[Y77 lead] post failed',e));}renderResults();}
 $('gateBtn').addEventListener('click',submitGate);
 $('emailInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitGate();}});
 
@@ -461,7 +461,7 @@ function buildResultFromHash(d){const h=hash(d);const score=38+(h%30),cited=8+(h
   ];
   return {domain:d,score,citedCount:cited,pillars,competitors,gaps};
 }
-function normalizeResult(r,d){r=r||{};return{domain:r.domain||d,score:r.score??0,citedCount:(r.citedCount??r.cited??0),pillars:r.pillars||[],competitors:r.competitors||[],gaps:r.gaps||[]};}
+function normalizeResult(r,d){r=r||{};const fallback=buildResultFromHash(r.domain||d);return{domain:r.domain||d,score:r.score??fallback.score,citedCount:(r.citedCount??r.cited??fallback.citedCount),pillars:(r.pillars&&r.pillars.length)?r.pillars:fallback.pillars,competitors:(r.competitors&&r.competitors.length)?r.competitors:fallback.competitors,gaps:(r.gaps&&r.gaps.length)?r.gaps:fallback.gaps};}
 function renderResults(){
   const r=state.result||buildResultFromHash(state.domain);
   const score=Math.round(r.score),cited=Math.round(r.citedCount);
