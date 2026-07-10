@@ -48,6 +48,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <div class="calendly-inline-widget" data-url="https://calendly.com/ara-y77/30min" style="min-width:320px;height:700px;"></div>
   <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js" async></script>
   <!-- Calendly inline widget end -->
+  
+  <!-- Listen for Calendly Events and push to Google Tag Manager -->
+  <script>
+    window.addEventListener(
+      'message',
+      function(e) {
+        if (e.origin !== "https://calendly.com") return;
+        if (e.data.event && e.data.event.indexOf('calendly') === 0) {
+          window.dataLayer = window.dataLayer || [];
+          window.dataLayer.push({
+            'event': e.data.event,
+            'calendly_payload': e.data.payload
+          });
+        }
+      }
+    );
+  </script>
 </div>
 
 </body>
